@@ -1,1 +1,255 @@
+# Server.js
+const express = require("express");
+const { main } = require("./models/index");
+const productRoute = require("./router/product");
+const storeRoute = require("./router/store");
+const purchaseRoute = require("./router/purchase");
+const salesRoute = require("./router/sales");
+const cors = require("cors");
+const User = require("./models/users");
+const Product = require("./models/Product");
 
+
+const app = express();
+const PORT = 4000;
+main();
+app.use(express.json());
+app.use(cors());
+
+// Store API
+app.use("/api/store", storeRoute);
+
+// Products API
+app.use("/api/product", productRoute);
+
+// Purchase API
+app.use("/api/purchase", purchaseRoute);
+
+// Sales API
+app.use("/api/sales", salesRoute);
+
+// ------------- Signin --------------
+let userAuthCheck;
+app.post("/api/login", async (req, res) => {
+  console.log(req.body);
+  // res.send("hi");
+  try {
+    const user = await User.findOne({
+      email: req.body.email,
+      password: req.body.password,
+    });
+    console.log("USER: ", user);
+    if (user) {
+      res.send(user);
+      userAuthCheck = user;
+    } else {
+      res.status(401).send("Invalid Credentials");
+      userAuthCheck = null;
+    }
+  } catch (error) {
+    console.log(error);
+    res.send(error);
+  }
+});
+
+// Getting User Details of login user
+app.get("/api/login", (req, res) => {
+  res.send(userAuthCheck);
+});
+// ------------------------------------
+
+// Registration API
+app.post("/api/register", (req, res) => {
+  let registerUser = new User({
+    firstName: req.body.firstName,
+    lastName: req.body.lastName,
+    email: req.body.email,
+    password: req.body.password,
+    phoneNumber: req.body.phoneNumber,
+    imageUrl: req.body.imageUrl,
+  });
+
+  registerUser
+    .save()
+    .then((result) => {
+      res.status(200).send(result);
+      alert("Signup Successfull");
+    })
+    .catch((err) => console.log("Signup: ", err));
+  console.log("request: ", req.body);
+});
+
+
+app.get("/testget", async (req,res)=>{
+  const result = await Product.findOne({ _id: '6429979b2e5434138eda1564'})
+  res.json(result)
+
+})
+
+// Here we are listening to the server
+app.listen(PORT, () => {
+  console.log("I am live again");
+});
+
+# Store.js
+const express = require("express");
+const app = express();
+const store = require("../controller/store");
+
+// Add Store 
+app.post("/add", store.addStore);
+
+// Get All Store
+app.get("/get/:userID", store.getAllStores)
+
+module.exports = app;
+
+# Sales.js
+const express = require("express");
+const app = express();
+const sales = require("../controller/sales");
+
+// Add Sales
+app.post("/add", sales.addSales);
+
+// Get All Sales
+app.get("/get/:userID", sales.getSalesData);
+app.get("/getmonthly", sales.getMonthlySales);
+
+
+app.get("/get/:userID/totalsaleamount", sales.getTotalSalesAmount);
+
+module.exports = app;
+
+
+
+// http://localhost:4000/api/sales/add POST
+// http://localhost:4000/api/sales/get GET
+
+# Purchase.js
+const express = require("express");
+const app = express();
+const purchase = require("../controller/purchase");
+
+// Add Purchase
+app.post("/add", purchase.addPurchase);
+
+// Get All Purchase Data
+app.get("/get/:userID", purchase.getPurchaseData);
+
+app.get("/get/:userID/totalpurchaseamount", purchase.getTotalPurchaseAmount);
+
+module.exports = app;
+
+// http://localhost:4000/api/purchase/add POST
+// http://localhost:4000/api/purchase/get GET
+
+# Product.js
+const express = require("express");
+const app = express();
+const product = require("../controller/product");
+
+// Add Product
+app.post("/add", product.addProduct);
+
+// Get All Products
+app.get("/get/:userId", product.getAllProducts);
+
+// Delete Selected Product Item
+app.get("/delete/:id", product.deleteSelectedProduct);
+
+// Update Selected Product
+app.post("/update", product.updateSelectedProduct);
+
+// Search Product
+app.get("/search", product.searchProduct);
+
+// http://localhost:4000/api/product/search?searchTerm=fa
+
+module.exports = app;
+
+# Users.js
+const mongoose = require('mongoose');
+
+const UserSchema = new mongoose.Schema({
+    firstName: 'String',
+    lastName : 'String',
+    email: 'String',
+    password: 'String',
+    phoneNumber: 'Number',
+    imageUrl: 'String',
+});
+
+const User = mongoose.model("users", UserSchema);
+module.exports = User;
+
+# Index.js
+const mongoose = require("mongoose");
+const uri = "mongodb+srv://adminhamza:adminhamza123&@cluster0.pzcviot.mongodb.net/InventoryManagementApp?retryWrites=true&w=majority";
+
+
+function main() {
+    mongoose.connect(uri).then(() => {
+        console.log("Succesfull")
+    
+    }).catch((err) => {
+        console.log("Error: ", err)
+    })
+}
+
+module.exports = { main };
+
+# SoldStock.js
+const Sales = require("../models/sales");
+const Product = require("../models/Product");
+
+
+const soldStock = async (productID, stockSoldData) => {
+
+  // Updating sold stock
+  try {
+    
+    const myProductData = await Product.findOne({ _id: productID });
+    let myUpdatedStock = myProductData.stock - stockSoldData;
+    console.log("MY SOLD STOCK: ", myUpdatedStock);
+
+    const SoldStock = await Product.findByIdAndUpdate(
+      { _id: productID },
+      {
+        stock: myUpdatedStock,
+      },
+      { new: true }
+    );
+    console.log(SoldStock);
+
+  } catch (error) {
+    console.error("Error updating sold stock ", error);
+  }
+};
+
+module.exports = soldStock;
+
+# PurchaseStock.js
+const Purchase = require("../models/purchase");
+const Product = require("../models/Product");
+
+const purchaseStock = async (productID, purchaseStockData) => {
+  // Updating Purchase stock
+  try {
+    const myProductData = await Product.findOne({ _id: productID });
+    let myUpdatedStock = parseInt(myProductData.stock) + purchaseStockData;
+
+    const PurchaseStock = await Product.findByIdAndUpdate(
+      { _id: productID },
+      {
+        stock: myUpdatedStock,
+      },
+      { new: true }
+    );
+    console.log(PurchaseStock);
+  } catch (error) {
+    console.error("Error updating Purchase stock ", error);
+  }
+};
+
+module.exports = purchaseStock;
